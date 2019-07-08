@@ -1,0 +1,45 @@
+#!/usr/bin/env sh
+
+BASE_PATH='https://eu.api.ovh.com/1.0'
+
+sign() {
+	tstamp="$1"
+	method="$2"
+	url="$3"
+	bodyfile="$4"
+
+	# shellcheck disable=SC2016
+	sign_prefix='$1$'
+	printf '%s%s' "$sign_prefix" "$(printf '%s+%s+%s+%s+%s+%s' "$OVH_AS" "$OVH_CK" "$method" "$url" "$(cat "$bodyfile")" "$tstamp" | shasum | cut -f1 -d ' ')"
+}
+
+call() {
+	method="$1"
+	path="$2"
+	bodyfile="$3"
+
+	url="${BASE_PATH}${path}"
+
+	tstamp="$(date +%s)"
+	signature="$(sign "$tstamp" "$method" "$url" "$bodyfile")"
+
+	curl -sS \
+		-X "${method}"                     \
+		-H "X-Ovh-Application: ${OVH_AK}"  \
+		-H "X-Ovh-Timestamp: ${tstamp}"    \
+		-H "X-Ovh-Signature: ${signature}" \
+		-H "X-Ovh-Consumer: ${OVH_CK}"     \
+		-H 'Accept: application/json'      \
+		-d @"$bodyfile"                    \
+		"$url"
+}
+
+method="$1"
+path="$2"
+bodyfile="$3"
+
+if [ -z "$bodyfile" ]; then
+	bodyfile='/dev/null'
+fi
+
+call "$method" "$path" "$bodyfile"
